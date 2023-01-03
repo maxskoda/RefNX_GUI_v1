@@ -1,0 +1,278 @@
+import base64
+
+from dash import Dash, dash_table, dcc, html
+from dash.dependencies import Input, Output, State
+from dash_extensions.enrich import Output, DashProxy, Input, MultiplexerTransform
+
+import dash_bootstrap_components as dbc
+import pandas as pd
+import json
+
+colors = {
+    'background': '#111111',
+    'text': '#7FDBFF'
+}
+# 'https://codepen.io/chriddyp/pen/bWLwgP.css',
+dbc_css = "https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates/dbc.min.css"
+app = DashProxy(transforms=[MultiplexerTransform()], external_stylesheets=[dbc.themes.DARKLY, dbc_css])
+# app = Dash(__name__, external_stylesheets=[dbc.themes.DARKLY, dbc_css])
+# external_stylesheets = [ dbc.themes.DARKLY]
+
+# app = Dash(__name__, external_stylesheets=external_stylesheets)
+
+colors = {
+    'background': '#111111',
+    'text': '#7FDBFF'
+}
+
+par_table = dash_table.DataTable(
+    id='parameter-table',
+    columns=[{"id": "Parameter Name", "name": "Parameter Name"},
+             {"id": "Value", "name": "Value"},
+             {"id": "Min", "name": "Min Value"},
+             {"id": "Max", "name": "Max Value"}, ],
+    style_cell={'textAlign': 'left'},
+    data=[{"Parameter Name": "oxide SLD",
+           "Value": "3.47",
+           "Min": "3.45",
+           "Max": "3.5"
+           }],
+    editable=True,
+    row_deletable=True,
+    # style_as_list_view=True,
+    style_data={
+        # 'color': 'black',
+        # 'backgroundColor': 'white'
+    },
+    style_data_conditional=[
+        {
+            'if': {'row_index': 'odd'},
+            'backgroundColor': 'rgb(20, 20, 20)',
+        }
+    ],
+    style_header={
+        'backgroundColor': 'rgb(210, 210, 210)',
+        'color': 'black',
+        'fontWeight': 'bold'
+    }
+)
+
+layer_table = dash_table.DataTable(
+    id='layer-table',
+    columns=[{"id": "Layer Name", "name": "Layer Name"},
+             {"id": "Thickness", "name": "Thickness", "presentation": "dropdown"},
+             {"id": "SLD", "name": "SLD", "presentation": "dropdown"},
+             {"id": "Roughness", "name": "Roughness", "presentation": "dropdown"}, ],
+    style_cell={'textAlign': 'left'},
+    data=[{"Layer Name": "oxide",
+           "Thickness": "3.47",
+           "SLD": "3.45",
+           "Roughness": "3.5"
+           }],
+
+    editable=True,
+    row_deletable=True,
+    dropdown={'Thickness': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]},
+              'SLD': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]},
+              'Roughness': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]}},
+
+    style_data={
+        # 'color': 'black',
+        # 'backgroundColor': 'white'
+    },
+    style_data_conditional=[
+        {
+            'if': {'row_index': 'odd'},
+            'backgroundColor': 'rgb(20, 20, 20)',
+        }
+    ],
+    style_header={
+        'backgroundColor': 'rgb(210, 210, 210)',
+        'color': 'black',
+        'fontWeight': 'bold'
+    }
+)
+
+contrast_table = dash_table.DataTable(
+    id='contrast-table',
+    columns=[{"id": "Layer Name", "name": "Layer Name"},
+             {"id": "Layer", "name": "Layer", "presentation": "dropdown"}, ],
+    style_cell={'textAlign': 'left'},
+    data=[{"Layer Name": "Layer",
+           "Layer": ""
+           }],
+
+    editable=True,
+    row_deletable=True,
+    dropdown={'Layer': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]}},
+    style_data={
+        # 'color': 'black',
+        # 'backgroundColor': 'white'
+    },
+    style_data_conditional=[
+        {
+            'if': {'row_index': 'odd'},
+            'backgroundColor': 'rgb(20, 20, 20)',
+        }
+    ],
+    style_header={
+        'backgroundColor': 'rgb(210, 210, 210)',
+        'color': 'black',
+        'fontWeight': 'bold'
+    }
+)
+
+app.layout = html.Div([
+    dcc.Upload(
+        id='upload-data',
+        children=html.Div([
+            'Drag and Drop or ',
+            html.A('Select Model File')
+        ]),
+        style={
+            'width': '100%',
+            'height': '60px',
+            'lineHeight': '60px',
+            'borderWidth': '1px',
+            'borderStyle': 'dashed',
+            'borderRadius': '5px',
+            'textAlign': 'center',
+            'margin': '10px'
+        },
+        # Allow multiple files to be uploaded
+        multiple=False
+    ),
+    dbc.Accordion(
+        [
+            dbc.AccordionItem(
+                [dbc.Button('Add Row', id='editing-par-rows-button', n_clicks=0),
+                 par_table],
+                title="Model Parameters",
+            ),
+            dbc.AccordionItem(
+                [dbc.Button('Add Row', id='editing-layer-rows-button', n_clicks=0),
+                 layer_table],
+                title="Layers",
+            ),
+            dbc.AccordionItem(
+                [dbc.FormFloating(
+                    [
+                        dbc.Input(type="input", placeholder=""),
+                        dbc.Label("File name"),
+                    ]
+                ),
+                    dbc.Button('Add Row', id='editing-contrast-rows-button', n_clicks=0),
+                    contrast_table,
+                ],
+                title="Contrast 1",
+            ),
+        ],
+        always_open=True,
+    ),
+
+    html.Div(id='some-output'),
+
+    dbc.Button("Save Model", id="btn-download-model", n_clicks=0),
+    dcc.Download(id="download-model")
+
+    # dcc.Graph(id='adding-rows-graph')
+
+], style={'width': '40%', 'display': 'inline-block', 'vertical-align': 'middle'}, className="dbc")
+
+
+@app.callback(Output('parameter-table', 'data'),
+              Output('layer-table', 'data'),
+              Input('upload-data', 'contents'),
+              State('upload-data', 'filename'),
+              State('upload-data', 'last_modified'))
+def load_model(model_dict, filename, list_of_dates):
+    if model_dict is not None:
+        content_type, content_string = model_dict.split(",")
+        decoded = base64.b64decode(content_string)
+
+        content_dict = json.loads(decoded)
+        params = content_dict['pars']
+        layers = content_dict['layers']
+
+        return params, layers
+    else:
+        default_pars = [{"Parameter Name": "oxide SLD",
+                         "Value": "3.47",
+                         "Min": "3.45",
+                         "Max": "3.5"
+                         }]
+        default_layers = [{"Layer Name": "oxide",
+                           "Thickness": "3.47",
+                           "SLD": "3.45",
+                           "Roughness": "3.5"
+                           }]
+        return default_pars, default_layers
+
+
+@app.callback(  # Output('some-output', 'children'),
+    Output('contrast-table', 'dropdown'),
+    Input('layer-table', 'data'))
+def on_contrast_table_change(data):
+    df = pd.DataFrame(data)
+
+    opts = {'Layer': {'options': [{'label': v, 'value': v} for v in df.loc[:, 'Layer Name']]}}
+    return opts
+
+
+@app.callback(  # Output('some-output', 'children')'#
+    Output('layer-table', 'dropdown'),
+    Input('parameter-table', 'data'))
+def on_table_change(data):
+    df = pd.DataFrame(data)
+    # print("HERE:", df.loc[:, 'Parameter Name'])
+
+    opts = {'Thickness': {'options': [{'label': v, 'value': v} for v in df.loc[:, 'Parameter Name']]},
+            'SLD': {'options': [{'label': v, 'value': v} for v in df.loc[:, 'Parameter Name']]},
+            'Roughness': {'options': [{'label': v, 'value': v} for v in df.loc[:, 'Parameter Name']]}}
+    return opts
+
+@app.callback(
+    Output('contrast-table', 'data'),
+    Input('editing-contrast-rows-button', 'n_clicks'),
+    State('contrast-table', 'data'),
+    State('contrast-table', 'columns'))
+def add_contrast_layer_row(n_clicks, rows, columns):
+    if n_clicks > 0:
+        rows.append({c['id']: '' for c in columns})
+    return rows
+
+
+@app.callback(
+    Output('parameter-table', 'data'),
+    Input('editing-par-rows-button', 'n_clicks'),
+    State('parameter-table', 'data'),
+    State('parameter-table', 'columns'))
+def add_row(n_clicks, rows, columns):
+    if n_clicks > 0:
+        rows.append({c['id']: '' for c in columns})
+    return rows
+
+
+@app.callback(
+    Output('layer-table', 'data'),
+    Input('editing-layer-rows-button', 'n_clicks'),
+    State('layer-table', 'data'),
+    State('layer-table', 'columns'))
+def add_row(n_clicks, rows, columns):
+    if n_clicks > 0:
+        rows.append({c['id']: '' for c in columns})
+    return rows
+
+
+@app.callback(Output("download-model", "data"),
+              State("parameter-table", "data"),
+              State("layer-table", "data"),
+              Input("btn-download-model", "n_clicks"),
+              prevent_initial_call=True, )
+def func(par_data, layer_data, n_clicks):
+    model_dict = {'pars': par_data, 'layers': layer_data}
+    return dict(content=json.dumps(model_dict, indent=4), filename="hello.txt")
+
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
