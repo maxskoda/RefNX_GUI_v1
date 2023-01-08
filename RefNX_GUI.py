@@ -1,6 +1,6 @@
 import base64
 
-from dash import Dash, dash_table, dcc, html
+from dash import Dash, dash_table, dcc, html, ALL, MATCH, ALLSMALLER
 from dash.dependencies import Input, Output, State
 from dash_extensions.enrich import Output, DashProxy, Input, MultiplexerTransform
 
@@ -99,13 +99,16 @@ layer_table = dash_table.DataTable(
 
 
 @app.callback(
-    Output("contrast-container", "children"),
+    Output("accordion-item", "children"),
     [Input("btn-add-contrast", "n_clicks")],
-    [State("contrast-container", "children")],
+    [State("accordion-item", "children")],
+    # State({"type": "dynamic-contrast", "index": MATCH}, "data"),
+    # [State("contrast-table", "children")],
 )
 def add_contrast(n, div_children):
     contrast_table = dash_table.DataTable(
-        id='contrast-table',
+        # id='contrast-table',
+        id={"type": "dynamic-contrast", "index": n},
         columns=[{"id": "Layer Name", "name": "Layer Name"},
                  {"id": "Layer", "name": "Layer", "presentation": "dropdown"}, ],
         style_cell={'textAlign': 'left'},
@@ -132,7 +135,21 @@ def add_contrast(n, div_children):
             'fontWeight': 'bold'
         }
     )
-    div_children.append(contrast_table)
+    acc_item = dbc.AccordionItem(
+        [dbc.FormFloating(
+            [
+                dbc.Input(type="input", placeholder=""),
+                dbc.Label("File name"),
+            ]
+        ),
+            dbc.Button('Add Row', n_clicks=0,  # id='editing-contrast-rows-button',
+                       id={"type": "dynamic-button", "index": n}, ),
+            html.Div(children=[contrast_table], id="contrast-container"),
+        ],
+        title="Contrast " + str(n+1),
+        id={"type": "dynamic-acc-item", "index": n},
+    )
+    div_children.append(acc_item)
     return div_children
 
 
@@ -157,7 +174,8 @@ col1 = html.Div([
         multiple=False
     ),
     dbc.Accordion(
-        [
+        id='accordion-item',
+        children=[
             dbc.AccordionItem(
                 [dbc.Button('Add Row', id='editing-par-rows-button', n_clicks=0),
                  par_table],
@@ -168,19 +186,7 @@ col1 = html.Div([
                  layer_table],
                 title="Layers",
             ),
-            html.Div(id='accordion-item', children=[
-                dbc.AccordionItem(
-                    [dbc.FormFloating(
-                        [
-                            dbc.Input(type="input", placeholder=""),
-                            dbc.Label("File name"),
-                        ]
-                    ),
-                        dbc.Button('Add Row', id='editing-contrast-rows-button', n_clicks=0),
-                        html.Div(id="contrast-container", children=[]),
-                    ],
-                    title="Contrast 1",
-                ), ]),
+            # html.Div(id='accordion-item', children=[]),
         ],
         always_open=True,
     ),
@@ -212,30 +218,30 @@ def generate_code(par_data, selected_rows, layer_data, contrast_data):
 
     outstring = '''    '''
 
-    for index, row in par_data.iterrows():
-        outstring += '''{} = Parameter({}, "{}", bounds=({}, {}), vary={})
-        '''.format(row['Parameter Name'].replace(' ', '_'),
-                   row['Value'], row['Parameter Name'].replace(' ', '_'),
-                   row['Min'], row['Max'],
-                   index in selected_rows)
-
-    outstring += '''
-        '''
-
-    for index, row in layer_data.iterrows():
-        outstring += '''{}_l = Slab({}, {}, {}, name='{}', vfsolv=0, interface=None))
-        '''.format(row['Layer Name'].replace(' ', '_'),
-                   row['Thickness'].replace(' ', '_'), row['SLD'].replace(' ', '_'), row['Roughness'].replace(' ', '_'),
-                   row['Layer Name'].replace(' ', '_'))
-
-    outstring += '''
-    '''
-
-    outstring += '''    s_contrast = '''
-
-    for index, row in contrast_data.iterrows():
-        outstring += '''{} | '''.format(row['Layer'].replace(' ', '_'))
-    # s_d2o_sub = si_sld | oxide_l | d2o(0, solv_roughness)
+    # for index, row in par_data.iterrows():
+    #     outstring += '''{} = Parameter({}, "{}", bounds=({}, {}), vary={})
+    #     '''.format(row['Parameter Name'].replace(' ', '_'),
+    #                row['Value'], row['Parameter Name'].replace(' ', '_'),
+    #                row['Min'], row['Max'],
+    #                index in selected_rows)
+    #
+    # outstring += '''
+    #     '''
+    #
+    # for index, row in layer_data.iterrows():
+    #     outstring += '''{}_l = Slab({}, {}, {}, name='{}', vfsolv=0, interface=None))
+    #     '''.format(row['Layer Name'].replace(' ', '_'),
+    #                row['Thickness'].replace(' ', '_'), row['SLD'].replace(' ', '_'), row['Roughness'].replace(' ', '_'),
+    #                row['Layer Name'].replace(' ', '_'))
+    #
+    # outstring += '''
+    # '''
+    #
+    # outstring += '''    s_contrast = '''
+    #
+    # for index, row in contrast_data.iterrows():
+    #     outstring += '''{} | '''.format(row['Layer'].replace(' ', '_'))
+    # # s_d2o_sub = si_sld | oxide_l | d2o(0, solv_roughness)
 
     code = dcc.Markdown('''
     ```python
@@ -275,39 +281,42 @@ def load_model(model_dict, filename, list_of_dates):
 
 
 @app.callback(  # Output('some-output', 'children'),
-    Output('contrast-table', 'dropdown'),
+    Output({"type": "dynamic-contrast", "index": ALL}, 'dropdown'),
     Input('layer-table', 'data'))
 def on_contrast_table_change(data):
     df = pd.DataFrame(data)
 
     opts = {'Layer': {'options': [{'label': v, 'value': v} for v in df.loc[:, 'Layer Name']]}}
-    return opts
+    return [opts]
 
 
-@app.callback(Output('some-output', 'children'),
-              Output('layer-table', 'dropdown'),
-              Input('parameter-table', 'selected_rows'),
-              Input('parameter-table', 'data'),
-              State('layer-table', 'data'),
-              State('contrast-table', 'data'),
-              )
-def on_table_change(selected_rows, par_data, layer_data, contrast_data):
+@app.callback(  # Output('some-output', 'children'),
+    Output('layer-table', 'dropdown'),
+    Input('parameter-table', 'selected_rows'),
+    Input('parameter-table', 'data'),
+    State('layer-table', 'data'),
+    # [State({"type": "dynamic-contrast", "index": ALL}, "data")],
+)
+def on_table_change(selected_rows, par_data, layer_data):# , contrast_data):
+    # print('Cpntrast_data ', contrast_data)
     p_data = pd.DataFrame(par_data)
     l_data = pd.DataFrame(layer_data)
-    c_data = pd.DataFrame(contrast_data)
-    code = generate_code(p_data, selected_rows, l_data, c_data)
+    # c_data = pd.DataFrame(contrast_data)
+
+    # code = generate_code(p_data, selected_rows, l_data, c_data)
 
     opts = {'Thickness': {'options': [{'label': v, 'value': v} for v in p_data.loc[:, 'Parameter Name']]},
             'SLD': {'options': [{'label': v, 'value': v} for v in p_data.loc[:, 'Parameter Name']]},
             'Roughness': {'options': [{'label': v, 'value': v} for v in p_data.loc[:, 'Parameter Name']]}}
-    return code, opts
+    return opts
 
 
 @app.callback(
-    Output('contrast-table', 'data'),
-    Input('editing-contrast-rows-button', 'n_clicks'),
-    State('contrast-table', 'data'),
-    State('contrast-table', 'columns'))
+    Output({"type": "dynamic-contrast", "index": MATCH}, "data"),  # 'contrast-table', 'data'),
+    # Input('editing-contrast-rows-button', 'n_clicks'),
+    Input({"type": "dynamic-button", "index": MATCH}, "n_clicks"),
+    State({"type": "dynamic-contrast", "index": MATCH}, "data"),  # 'dynamic-contrast', 'data'),
+    State({"type": "dynamic-contrast", "index": MATCH}, "columns"))  # 'dynamic-contrast', 'columns'))
 def add_contrast_layer_row(n_clicks, rows, columns):
     if n_clicks > 0:
         rows.append({c['id']: '' for c in columns})
