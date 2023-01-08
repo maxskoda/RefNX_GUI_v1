@@ -15,7 +15,8 @@ colors = {
 }
 # 'https://codepen.io/chriddyp/pen/bWLwgP.css',
 dbc_css = "https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates/dbc.min.css"
-app = DashProxy(transforms=[MultiplexerTransform()], external_stylesheets=[dbc.themes.DARKLY, dbc_css])
+app = DashProxy(transforms=[MultiplexerTransform()], suppress_callback_exceptions=True,
+                external_stylesheets=[dbc.themes.DARKLY, dbc_css])
 # app = Dash(__name__, external_stylesheets=[dbc.themes.DARKLY, dbc_css])
 # external_stylesheets = [ dbc.themes.DARKLY]
 
@@ -102,13 +103,16 @@ layer_table = dash_table.DataTable(
     Output("accordion-item", "children"),
     [Input("btn-add-contrast", "n_clicks")],
     [State("accordion-item", "children")],
-    # State({"type": "dynamic-contrast", "index": MATCH}, "data"),
+    # State({"type": "dynamic-contrast", "index": ALL}, "dropdown"),
     # [State("contrast-table", "children")],
 )
-def add_contrast(n, div_children):
+def add_contrast(n, div_children):#  , contrast_dropdown):
+
+    # c_data = pd.DataFrame(contrast_dropdown)
+    # print(c_data)
     contrast_table = dash_table.DataTable(
-        # id='contrast-table',
-        id={"type": "dynamic-contrast", "index": n},
+        id='contrast-table',
+        # id={"type": "dynamic-contrast", "index": n},
         columns=[{"id": "Layer Name", "name": "Layer Name"},
                  {"id": "Layer", "name": "Layer", "presentation": "dropdown"}, ],
         style_cell={'textAlign': 'left'},
@@ -281,13 +285,14 @@ def load_model(model_dict, filename, list_of_dates):
 
 
 @app.callback(  # Output('some-output', 'children'),
-    Output({"type": "dynamic-contrast", "index": ALL}, 'dropdown'),
+    # Output({"type": "dynamic-contrast", "index": MATCH}, 'dropdown'),
+    Output('contrast-table', 'dropdown'),
     Input('layer-table', 'data'))
 def on_contrast_table_change(data):
     df = pd.DataFrame(data)
 
     opts = {'Layer': {'options': [{'label': v, 'value': v} for v in df.loc[:, 'Layer Name']]}}
-    return [opts]
+    return opts
 
 
 @app.callback(  # Output('some-output', 'children'),
@@ -312,11 +317,14 @@ def on_table_change(selected_rows, par_data, layer_data):# , contrast_data):
 
 
 @app.callback(
-    Output({"type": "dynamic-contrast", "index": MATCH}, "data"),  # 'contrast-table', 'data'),
+    # Output({"type": "dynamic-contrast", "index": MATCH}, "data"),  # 'contrast-table', 'data'),
     # Input('editing-contrast-rows-button', 'n_clicks'),
-    Input({"type": "dynamic-button", "index": MATCH}, "n_clicks"),
-    State({"type": "dynamic-contrast", "index": MATCH}, "data"),  # 'dynamic-contrast', 'data'),
-    State({"type": "dynamic-contrast", "index": MATCH}, "columns"))  # 'dynamic-contrast', 'columns'))
+    Output('contrast-table', 'data'),
+    Input({"type": "dynamic-button", "index": 0}, "n_clicks"),
+    State('contrast-table', 'data'),
+    State('contrast-table', 'columns'))
+    # State({"type": "dynamic-contrast", "index": MATCH}, "data"),  # 'dynamic-contrast', 'data'),
+    # State({"type": "dynamic-contrast", "index": MATCH}, "columns"))  # 'dynamic-contrast', 'columns'))
 def add_contrast_layer_row(n_clicks, rows, columns):
     if n_clicks > 0:
         rows.append({c['id']: '' for c in columns})
