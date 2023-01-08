@@ -98,47 +98,43 @@ layer_table = dash_table.DataTable(
     }
 )
 
+# contrast_table = dash_table.DataTable(
+#     # id='contrast-table',
+#     id={"type": "contrast-table", "index": n},
+#     columns=[{"id": "Layer Name", "name": "Layer Name"},
+#              {"id": "Layer", "name": "Layer", "presentation": "dropdown"}, ],
+#     style_cell={'textAlign': 'left'},
+#     data=[{"Layer Name": "Layer",
+#            "Layer": ""
+#            }],
+#
+#     editable=True,
+#     row_deletable=True,
+#     dropdown={'Layer': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]}},
+#     style_data={
+#         # 'color': 'black',
+#         # 'backgroundColor': 'white'
+#     },
+#     style_data_conditional=[
+#         {
+#             'if': {'row_index': 'odd'},
+#             'backgroundColor': 'rgb(20, 20, 20)',
+#         }
+#     ],
+#     style_header={
+#         'backgroundColor': 'rgb(210, 210, 210)',
+#         'color': 'black',
+#         'fontWeight': 'bold'
+#     }
+# )
+
 
 @app.callback(
     Output("accordion-item", "children"),
     [Input("btn-add-contrast", "n_clicks")],
     [State("accordion-item", "children")],
-    # State({"type": "dynamic-contrast", "index": ALL}, "dropdown"),
-    # [State("contrast-table", "children")],
 )
-def add_contrast(n, div_children):#  , contrast_dropdown):
-
-    # c_data = pd.DataFrame(contrast_dropdown)
-    # print(c_data)
-    contrast_table = dash_table.DataTable(
-        id='contrast-table',
-        # id={"type": "dynamic-contrast", "index": n},
-        columns=[{"id": "Layer Name", "name": "Layer Name"},
-                 {"id": "Layer", "name": "Layer", "presentation": "dropdown"}, ],
-        style_cell={'textAlign': 'left'},
-        data=[{"Layer Name": "Layer",
-               "Layer": ""
-               }],
-
-        editable=True,
-        row_deletable=True,
-        dropdown={'Layer': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]}},
-        style_data={
-            # 'color': 'black',
-            # 'backgroundColor': 'white'
-        },
-        style_data_conditional=[
-            {
-                'if': {'row_index': 'odd'},
-                'backgroundColor': 'rgb(20, 20, 20)',
-            }
-        ],
-        style_header={
-            'backgroundColor': 'rgb(210, 210, 210)',
-            'color': 'black',
-            'fontWeight': 'bold'
-        }
-    )
+def add_contrast(n, div_children):
     acc_item = dbc.AccordionItem(
         [dbc.FormFloating(
             [
@@ -148,9 +144,39 @@ def add_contrast(n, div_children):#  , contrast_dropdown):
         ),
             dbc.Button('Add Row', n_clicks=0,  # id='editing-contrast-rows-button',
                        id={"type": "dynamic-button", "index": n}, ),
-            html.Div(children=[contrast_table], id="contrast-container"),
+
+            dash_table.DataTable(
+                id={"type": "contrast-table", "index": n},
+                columns=[{"id": "Layer Name", "name": "Layer Name"},
+                         {"id": "Layer", "name": "Layer", "presentation": "dropdown"}, ],
+                style_cell={'textAlign': 'left'},
+                data=[{"Layer Name": "Layer",
+                       "Layer": ""
+                       }],
+
+                editable=True,
+                row_deletable=True,
+                dropdown={'Layer': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]}},
+                style_data={
+                    # 'color': 'black',
+                    # 'backgroundColor': 'white'
+                },
+                style_data_conditional=[
+                    {
+                        'if': {'row_index': 'odd'},
+                        'backgroundColor': 'rgb(20, 20, 20)',
+                    }
+                ],
+                style_header={
+                    'backgroundColor': 'rgb(210, 210, 210)',
+                    'color': 'black',
+                    'fontWeight': 'bold'
+                }
+            )
+
+            # html.Div(children=[contrast_table], id="contrast-container"),
         ],
-        title="Contrast " + str(n+1),
+        title="Contrast " + str(n + 1),
         id={"type": "dynamic-acc-item", "index": n},
     )
     div_children.append(acc_item)
@@ -286,9 +312,12 @@ def load_model(model_dict, filename, list_of_dates):
 
 @app.callback(  # Output('some-output', 'children'),
     # Output({"type": "dynamic-contrast", "index": MATCH}, 'dropdown'),
-    Output('contrast-table', 'dropdown'),
-    Input('layer-table', 'data'))
-def on_contrast_table_change(data):
+    # Output('contrast-table', 'dropdown'),
+    Output({"type": "contrast-table", "index": MATCH}, 'dropdown'),
+    Input('layer-table', 'data'),
+    State({"type": "contrast-table", "index": MATCH}, 'data')
+)
+def on_contrast_table_change(data, contrast_data):
     df = pd.DataFrame(data)
 
     opts = {'Layer': {'options': [{'label': v, 'value': v} for v in df.loc[:, 'Layer Name']]}}
@@ -300,10 +329,8 @@ def on_contrast_table_change(data):
     Input('parameter-table', 'selected_rows'),
     Input('parameter-table', 'data'),
     State('layer-table', 'data'),
-    # [State({"type": "dynamic-contrast", "index": ALL}, "data")],
 )
-def on_table_change(selected_rows, par_data, layer_data):# , contrast_data):
-    # print('Cpntrast_data ', contrast_data)
+def on_table_change(selected_rows, par_data, layer_data):
     p_data = pd.DataFrame(par_data)
     l_data = pd.DataFrame(layer_data)
     # c_data = pd.DataFrame(contrast_data)
@@ -317,14 +344,11 @@ def on_table_change(selected_rows, par_data, layer_data):# , contrast_data):
 
 
 @app.callback(
-    # Output({"type": "dynamic-contrast", "index": MATCH}, "data"),  # 'contrast-table', 'data'),
-    # Input('editing-contrast-rows-button', 'n_clicks'),
-    Output('contrast-table', 'data'),
-    Input({"type": "dynamic-button", "index": 0}, "n_clicks"),
-    State('contrast-table', 'data'),
-    State('contrast-table', 'columns'))
-    # State({"type": "dynamic-contrast", "index": MATCH}, "data"),  # 'dynamic-contrast', 'data'),
-    # State({"type": "dynamic-contrast", "index": MATCH}, "columns"))  # 'dynamic-contrast', 'columns'))
+    Output({"type": "contrast-table", "index": MATCH}, 'data'),
+    Input({"type": "dynamic-button", "index": MATCH}, 'n_clicks'),
+    State({"type": "contrast-table", "index": MATCH}, 'data'),
+    State({"type": "contrast-table", "index": MATCH}, 'columns')
+)
 def add_contrast_layer_row(n_clicks, rows, columns):
     if n_clicks > 0:
         rows.append({c['id']: '' for c in columns})
