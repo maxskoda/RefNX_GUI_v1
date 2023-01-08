@@ -3,6 +3,7 @@ import base64
 from dash import Dash, dash_table, dcc, html, ALL, MATCH, ALLSMALLER
 from dash.dependencies import Input, Output, State
 from dash_extensions.enrich import Output, DashProxy, Input, MultiplexerTransform
+from dash.exceptions import PreventUpdate
 
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -98,36 +99,6 @@ layer_table = dash_table.DataTable(
     }
 )
 
-# contrast_table = dash_table.DataTable(
-#     # id='contrast-table',
-#     id={"type": "contrast-table", "index": n},
-#     columns=[{"id": "Layer Name", "name": "Layer Name"},
-#              {"id": "Layer", "name": "Layer", "presentation": "dropdown"}, ],
-#     style_cell={'textAlign': 'left'},
-#     data=[{"Layer Name": "Layer",
-#            "Layer": ""
-#            }],
-#
-#     editable=True,
-#     row_deletable=True,
-#     dropdown={'Layer': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]}},
-#     style_data={
-#         # 'color': 'black',
-#         # 'backgroundColor': 'white'
-#     },
-#     style_data_conditional=[
-#         {
-#             'if': {'row_index': 'odd'},
-#             'backgroundColor': 'rgb(20, 20, 20)',
-#         }
-#     ],
-#     style_header={
-#         'backgroundColor': 'rgb(210, 210, 210)',
-#         'color': 'black',
-#         'fontWeight': 'bold'
-#     }
-# )
-
 
 @app.callback(
     Output("accordion-item", "children"),
@@ -142,7 +113,7 @@ def add_contrast(n, div_children):
                 dbc.Label("File name"),
             ]
         ),
-            dbc.Button('Add Row', n_clicks=0,  # id='editing-contrast-rows-button',
+            dbc.Button('Add Row', n_clicks=0,
                        id={"type": "dynamic-button", "index": n}, ),
 
             dash_table.DataTable(
@@ -311,8 +282,6 @@ def load_model(model_dict, filename, list_of_dates):
 
 
 @app.callback(  # Output('some-output', 'children'),
-    # Output({"type": "dynamic-contrast", "index": MATCH}, 'dropdown'),
-    # Output('contrast-table', 'dropdown'),
     Output({"type": "contrast-table", "index": MATCH}, 'dropdown'),
     Input('layer-table', 'data'),
     State({"type": "contrast-table", "index": MATCH}, 'data')
@@ -349,10 +318,21 @@ def on_table_change(selected_rows, par_data, layer_data):
     State({"type": "contrast-table", "index": MATCH}, 'data'),
     State({"type": "contrast-table", "index": MATCH}, 'columns')
 )
-def add_contrast_layer_row(n_clicks, rows, columns):
+def add_contrast_table_row(n_clicks, rows, columns):
     if n_clicks > 0:
         rows.append({c['id']: '' for c in columns})
     return rows
+
+
+@app.callback(
+    Output({"type": "dynamic-button", "index": MATCH}, 'n_clicks'),
+    Input({"type": "dynamic-button", "index": MATCH}, 'n_clicks'),
+)
+def upon_click(n_clicks):
+    if n_clicks == 1:
+        raise PreventUpdate
+    print(n_clicks)
+    return 1
 
 
 @app.callback(
@@ -360,10 +340,21 @@ def add_contrast_layer_row(n_clicks, rows, columns):
     Input('editing-par-rows-button', 'n_clicks'),
     State('parameter-table', 'data'),
     State('parameter-table', 'columns'))
-def add_row(n_clicks, rows, columns):
+def add_par_table_row(n_clicks, rows, columns):
     if n_clicks > 0:
         rows.append({c['id']: '' for c in columns})
     return rows
+
+
+@app.callback(
+    Output('editing-par-rows-button', 'n_clicks'),
+    Input('editing-par-rows-button', 'n_clicks')
+)
+def upon_click(n_clicks):
+    if n_clicks == 1:
+        raise PreventUpdate
+    print(n_clicks)
+    return 1
 
 
 @app.callback(
@@ -371,10 +362,21 @@ def add_row(n_clicks, rows, columns):
     Input('editing-layer-rows-button', 'n_clicks'),
     State('layer-table', 'data'),
     State('layer-table', 'columns'))
-def add_row(n_clicks, rows, columns):
+def add_layer_table_row(n_clicks, rows, columns):
     if n_clicks > 0:
         rows.append({c['id']: '' for c in columns})
     return rows
+
+
+@app.callback(
+    Output('editing-layer-rows-button', 'n_clicks'),
+    Input('editing-layer-rows-button', 'n_clicks')
+)
+def upon_click(n_clicks):
+    if n_clicks == 1:
+        raise PreventUpdate
+    print(n_clicks)
+    return 1
 
 
 @app.callback(Output("download-model", "data"),
