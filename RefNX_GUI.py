@@ -1,4 +1,5 @@
 import base64
+import pprint
 
 from dash import Dash, dash_table, dcc, html, ALL, MATCH, ALLSMALLER
 from dash.dependencies import Input, Output, State
@@ -14,10 +15,10 @@ colors = {
     'background': '#111111',
     'text': '#7FDBFF'
 }
-# 'https://codepen.io/chriddyp/pen/bWLwgP.css',
+# dbc_css = 'https://codepen.io/chriddyp/pen/bWLwgP.css',
 dbc_css = "https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates/dbc.min.css"
 app = DashProxy(transforms=[MultiplexerTransform()], suppress_callback_exceptions=True,
-                external_stylesheets=[dbc.themes.DARKLY, dbc_css])
+                external_stylesheets=[dbc.themes.SLATE, dbc_css])
 # app = Dash(__name__, external_stylesheets=[dbc.themes.DARKLY, dbc_css])
 # external_stylesheets = [ dbc.themes.DARKLY]
 
@@ -34,7 +35,7 @@ par_table = dash_table.DataTable(
              {"id": "Value", "name": "Value", "type": "numeric"},
              {"id": "Min", "name": "Min Value", "type": "numeric"},
              {"id": "Max", "name": "Max Value", "type": "numeric"}],
-    style_cell={'textAlign': 'left'},
+    style_cell={'textAlign': 'left', 'font-size': 14, 'padding': '0px'},
     data=[{"Parameter Name": "oxide SLD",
            "Value": "3.47",
            "Min": "3.45",
@@ -68,19 +69,24 @@ layer_table = dash_table.DataTable(
     columns=[{"id": "Layer Name", "name": "Layer Name"},
              {"id": "Thickness", "name": "Thickness", "presentation": "dropdown"},
              {"id": "SLD", "name": "SLD", "presentation": "dropdown"},
-             {"id": "Roughness", "name": "Roughness", "presentation": "dropdown"}, ],
-    style_cell={'textAlign': 'left'},
+             {"id": "Roughness", "name": "Roughness", "presentation": "dropdown"},
+             {"id": "Hydration", "name": "Hydration", "presentation": "dropdown"},
+             ],
+    style_cell={'textAlign': 'left', 'font-size': 14, 'padding': '0px'},
     data=[{"Layer Name": "oxide",
            "Thickness": "3.47",
            "SLD": "3.45",
-           "Roughness": "3.5"
+           "Roughness": "3.5",
+           "Hydration": "0.0"
            }],
 
     editable=True,
     row_deletable=True,
     dropdown={'Thickness': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]},
               'SLD': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]},
-              'Roughness': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]}},
+              'Roughness': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]},
+              'Hydration': {'options': [{'label': 'Default Value', 'value': 'Default Value'}]}
+              },
 
     style_data={
         # 'color': 'black',
@@ -102,6 +108,7 @@ layer_table = dash_table.DataTable(
 
 @app.callback(
     Output("accordion-item", "children"),
+    Output("input_contrast_range", "max"),
     [Input("btn-add-contrast", "n_clicks")],
     [State("accordion-item", "children")],
 )
@@ -114,13 +121,14 @@ def add_contrast(n, div_children):
             ]
         ),
             dbc.Button('Add Row', n_clicks=0,
-                       id={"type": "dynamic-button", "index": n}, ),
+                       id={"type": "dynamic-button", "index": n},
+                       style={"padding": '5px'}, ),
 
             dash_table.DataTable(
                 id={"type": "contrast-table", "index": n},
                 columns=[{"id": "Layer Name", "name": "Layer Name"},
                          {"id": "Layer", "name": "Layer", "presentation": "dropdown"}, ],
-                style_cell={'textAlign': 'left'},
+                style_cell={'textAlign': 'left', 'font-size': 14, 'padding': '0px'},
                 data=[{"Layer Name": "Layer",
                        "Layer": ""
                        }],
@@ -151,7 +159,36 @@ def add_contrast(n, div_children):
         id={"type": "dynamic-acc-item", "index": n},
     )
     div_children.append(acc_item)
-    return div_children
+    return div_children, n + 1
+
+
+@app.callback(
+    Output("accordion-item", "children"),
+    Output("input_contrast_range", "max"),
+    [Input("btn-delete-contrast", "n_clicks")],
+    [State("accordion-item", "children")],
+    [State("btn-add-contrast", "n_clicks")],
+    [State("input_contrast_range", "value")],
+)
+def delete_contrast(n, div_children, ncontrast, which):
+    if n > 0:
+        div_children.pop(which + 1)
+        return div_children, ncontrast
+    else:
+        return div_children, ncontrast + 1
+
+
+@app.callback(
+    Output({"type": "dynamic-acc-item", "index": ALL}, "title"),
+    Input("input_contrast_range", "max"),
+    State("accordion-item", "children"),
+    State({"type": "dynamic-acc-item", "index": ALL}, "title")
+)
+def update_contrast_titles(ncontrast, div_children, titles):
+    for i, title in enumerate(titles):
+        titles[i] = "Contrast " + str(i + 1)
+
+    return titles
 
 
 col1 = html.Div([
@@ -178,16 +215,17 @@ col1 = html.Div([
         id='accordion-item',
         children=[
             dbc.AccordionItem(
-                [dbc.Button('Add Row', id='editing-par-rows-button', n_clicks=0),
+                [dbc.Button('Add Row', id='editing-par-rows-button', n_clicks=0,
+                            style={"padding": '5px'}, ),
                  par_table],
                 title="Model Parameters",
             ),
             dbc.AccordionItem(
-                [dbc.Button('Add Row', id='editing-layer-rows-button', n_clicks=0),
+                [dbc.Button('Add Row', id='editing-layer-rows-button', n_clicks=0,
+                            style={"padding": '5px'}, ),
                  layer_table],
                 title="Layers",
             ),
-            # html.Div(id='accordion-item', children=[]),
         ],
         always_open=True,
     ),
@@ -195,6 +233,9 @@ col1 = html.Div([
     # html.Div(id='some-output'),
 
     dbc.Button("Add contrast", id="btn-add-contrast", n_clicks=0),
+    dbc.Button("Delete contrast", id="btn-delete-contrast", n_clicks=0),
+    dcc.Input(id="input_contrast_range", type="number", placeholder="input with range",
+              value=1, min=1, max=100, step=1, ),
 
     dbc.Button("Save Model...", id="btn-download-model", style={"margin-left": "15px"}, n_clicks=0),
     dcc.Download(id="download-model")
@@ -219,29 +260,34 @@ def generate_code(par_data, selected_rows, layer_data, contrast_data):
 
     outstring = '''    '''
 
-    # for index, row in par_data.iterrows():
-    #     outstring += '''{} = Parameter({}, "{}", bounds=({}, {}), vary={})
-    #     '''.format(row['Parameter Name'].replace(' ', '_'),
-    #                row['Value'], row['Parameter Name'].replace(' ', '_'),
-    #                row['Min'], row['Max'],
-    #                index in selected_rows)
-    #
-    # outstring += '''
-    #     '''
-    #
-    # for index, row in layer_data.iterrows():
-    #     outstring += '''{}_l = Slab({}, {}, {}, name='{}', vfsolv=0, interface=None))
-    #     '''.format(row['Layer Name'].replace(' ', '_'),
-    #                row['Thickness'].replace(' ', '_'), row['SLD'].replace(' ', '_'), row['Roughness'].replace(' ', '_'),
-    #                row['Layer Name'].replace(' ', '_'))
-    #
-    # outstring += '''
-    # '''
-    #
+    for index, row in par_data.iterrows():
+        outstring += '''{} = Parameter({}, "{}", bounds=({}, {}), vary={})
+        '''.format(row['Parameter Name'].replace(' ', '_'),
+                   row['Value'], row['Parameter Name'].replace(' ', '_'),
+                   row['Min'], row['Max'],
+                   index in selected_rows)
+
+    outstring += '''
+        '''
+
+    for index, row in layer_data.iterrows():
+        outstring += '''{}_l = Slab({}, {}, {}, name='{}', vfsolv=0, interface=None))
+        '''.format(row['Layer Name'].replace(' ', '_'),
+                   row['Thickness'].replace(' ', '_'), row['SLD'].replace(' ', '_'), row['Roughness'].replace(' ', '_'),
+                   row['Layer Name'].replace(' ', '_'))
+
+    outstring += '''
+    '''
+
     # outstring += '''    s_contrast = '''
     #
-    # for index, row in contrast_data.iterrows():
-    #     outstring += '''{} | '''.format(row['Layer'].replace(' ', '_'))
+    for index, row in contrast_data.iterrows():
+        outstring += '''    
+        s_contrast_{} ='''.format(index)
+        for lay in row:
+            if lay is not None:
+                outstring += ''' {} |'''.format(lay['Layer'].replace(' ', '_'))
+
     # # s_d2o_sub = si_sld | oxide_l | d2o(0, solv_roughness)
 
     code = dcc.Markdown('''
@@ -293,23 +339,27 @@ def on_contrast_table_change(data, contrast_data):
     return opts
 
 
-@app.callback(  # Output('some-output', 'children'),
-    Output('layer-table', 'dropdown'),
-    Input('parameter-table', 'selected_rows'),
-    Input('parameter-table', 'data'),
-    State('layer-table', 'data'),
-)
-def on_table_change(selected_rows, par_data, layer_data):
+@app.callback(Output('some-output', 'children'),
+              Output('layer-table', 'dropdown'),
+              Input('parameter-table', 'selected_rows'),
+              Input('parameter-table', 'data'),
+              State('layer-table', 'data'),
+              # State({"type": "dynamic-acc-item", "index": ALL}, )
+              State({"type": "contrast-table", "index": ALL}, 'data')
+              )
+def on_table_change(selected_rows, par_data, layer_data, contrast_data):
     p_data = pd.DataFrame(par_data)
     l_data = pd.DataFrame(layer_data)
-    # c_data = pd.DataFrame(contrast_data)
+    c_data = pd.DataFrame(contrast_data)
 
-    # code = generate_code(p_data, selected_rows, l_data, c_data)
+    code = generate_code(p_data, selected_rows, l_data, c_data)
 
     opts = {'Thickness': {'options': [{'label': v, 'value': v} for v in p_data.loc[:, 'Parameter Name']]},
             'SLD': {'options': [{'label': v, 'value': v} for v in p_data.loc[:, 'Parameter Name']]},
-            'Roughness': {'options': [{'label': v, 'value': v} for v in p_data.loc[:, 'Parameter Name']]}}
-    return opts
+            'Roughness': {'options': [{'label': v, 'value': v} for v in p_data.loc[:, 'Parameter Name']]},
+            'Hydration': {'options': [{'label': v, 'value': v} for v in p_data.loc[:, 'Parameter Name']]}
+            }
+    return code, opts
 
 
 @app.callback(
@@ -331,7 +381,7 @@ def add_contrast_table_row(n_clicks, rows, columns):
 def upon_click(n_clicks):
     if n_clicks == 1:
         raise PreventUpdate
-    print(n_clicks)
+
     return 1
 
 
@@ -353,7 +403,7 @@ def add_par_table_row(n_clicks, rows, columns):
 def upon_click(n_clicks):
     if n_clicks == 1:
         raise PreventUpdate
-    print(n_clicks)
+
     return 1
 
 
@@ -375,18 +425,23 @@ def add_layer_table_row(n_clicks, rows, columns):
 def upon_click(n_clicks):
     if n_clicks == 1:
         raise PreventUpdate
-    print(n_clicks)
+
     return 1
 
 
 @app.callback(Output("download-model", "data"),
               State("parameter-table", "data"),
               State("layer-table", "data"),
+              State({"type": "contrast-table", "index": ALL}, "data"),
+              State("btn-add-contrast", "n_clicks"),
               Input("btn-download-model", "n_clicks"),
               prevent_initial_call=True, )
-def save_model(par_data, layer_data, n_clicks):
+def save_model(par_data, layer_data, contrast_data, ncontrasts, n_clicks):
     model_dict = {'pars': par_data, 'layers': layer_data}
-    return dict(content=json.dumps(model_dict, indent=4), filename="hello.txt")
+
+    for i, contrast in enumerate(contrast_data):
+        model_dict['Contrast_'+str(i+1)] = contrast
+    return dict(content=json.dumps(model_dict, indent=4), filename="model.json")
 
 
 if __name__ == '__main__':
