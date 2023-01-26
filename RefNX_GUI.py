@@ -1,7 +1,7 @@
 import base64
 import pprint
 
-from dash import Dash, dash_table, dcc, html, ALL, MATCH, ALLSMALLER
+from dash import Dash, dash_table, dcc, html, ctx, ALL, MATCH, ALLSMALLER
 from dash.dependencies import Input, Output, State
 from dash_extensions.enrich import Output, DashProxy, Input, MultiplexerTransform
 from dash.exceptions import PreventUpdate
@@ -10,6 +10,9 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 import json
 import os
+
+## General interactions:
+# Load model
 
 colors = {
     'background': '#111111',
@@ -24,13 +27,9 @@ app = DashProxy(transforms=[MultiplexerTransform()], suppress_callback_exception
 
 # app = Dash(__name__, external_stylesheets=external_stylesheets)
 
-colors = {
-    'background': '#111111',
-    'text': '#7FDBFF'
-}
-
 par_table = dash_table.DataTable(
     id='parameter-table',
+    # id={"type": 'parameter-table', "index": 0},
     columns=[{"id": "Parameter Name", "name": "Parameter Name"},
              {"id": "Value", "name": "Value", "type": "numeric"},
              {"id": "Min", "name": "Min Value", "type": "numeric"},
@@ -165,10 +164,10 @@ def add_contrast(n, div_children):
 @app.callback(
     Output("accordion-item", "children"),
     Output("input_contrast_range", "max"),
-    [Input("btn-delete-contrast", "n_clicks")],
-    [State("accordion-item", "children")],
-    [State("btn-add-contrast", "n_clicks")],
-    [State("input_contrast_range", "value")],
+    Input("btn-delete-contrast", "n_clicks"),
+    State("accordion-item", "children"),
+    State("btn-add-contrast", "n_clicks"),
+    State("input_contrast_range", "value"),
 )
 def delete_contrast(n, div_children, ncontrast, which):
     if n > 0:
@@ -283,7 +282,7 @@ def generate_code(par_data, selected_rows, layer_data, contrast_data):
     #
     for index, row in contrast_data.iterrows():
         outstring += '''    
-        s_contrast_{} ='''.format(index)
+        s_contrast_{} ='''.format(index+1)
         for lay in row:
             if lay is not None:
                 outstring += ''' {} |'''.format(lay['Layer'].replace(' ', '_'))
@@ -300,19 +299,26 @@ def generate_code(par_data, selected_rows, layer_data, contrast_data):
 
 @app.callback(Output('parameter-table', 'data'),
               Output('layer-table', 'data'),
+              Output('accordion-item', 'children'),
               Input('upload-data', 'contents'),
               State('upload-data', 'filename'),
-              State('upload-data', 'last_modified'))
-def load_model(model_dict, filename, list_of_dates):
+              State('upload-data', 'last_modified'),
+              State('accordion-item', 'children')
+              )
+def load_model(model_dict, filename, list_of_dates, acc_item):
     if model_dict is not None:
         content_type, content_string = model_dict.split(",")
         decoded = base64.b64decode(content_string)
 
         content_dict = json.loads(decoded)
-        params = content_dict['pars']
-        layers = content_dict['layers']
+        params = content_dict['Pars']
+        layers = content_dict['Layers']
+        contrasts = content_dict['Contrasts']
+        # for i in range(2, len(acc_item)):
+        #     print(i)
+        # acc_item.pop(-1)
 
-        return params, layers
+        return params, layers, acc_item #, contrasts
     else:
         default_pars = [{"Parameter Name": "oxide SLD",
                          "Value": "3.47",
@@ -324,7 +330,7 @@ def load_model(model_dict, filename, list_of_dates):
                            "SLD": "3.45",
                            "Roughness": "3.5"
                            }]
-        return default_pars, default_layers
+        return default_pars, default_layers, acc_item
 
 
 @app.callback(  # Output('some-output', 'children'),
@@ -437,10 +443,13 @@ def upon_click(n_clicks):
               Input("btn-download-model", "n_clicks"),
               prevent_initial_call=True, )
 def save_model(par_data, layer_data, contrast_data, ncontrasts, n_clicks):
-    model_dict = {'pars': par_data, 'layers': layer_data}
+    model_dict = {'Pars': par_data, 'Layers': layer_data}
 
+    contrast_list = []
     for i, contrast in enumerate(contrast_data):
-        model_dict['Contrast_'+str(i+1)] = contrast
+        contrast_list.append({'Contrast_'+str(i+1): contrast})
+
+    model_dict['Contrasts'] = contrast_list
     return dict(content=json.dumps(model_dict, indent=4), filename="model.json")
 
 
