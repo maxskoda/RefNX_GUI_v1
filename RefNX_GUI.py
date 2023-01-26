@@ -1,7 +1,10 @@
 import base64
 import pprint
 
-from dash import Dash, dash_table, dcc, html, ctx, ALL, MATCH, ALLSMALLER
+from dataclasses import dataclass, asdict
+from enum import Enum, auto
+
+from dash import Dash, dash_table, dcc, html, ctx, no_update, ALL, MATCH, ALLSMALLER
 from dash.dependencies import Input, Output, State
 from dash_extensions.enrich import Output, DashProxy, Input, MultiplexerTransform
 from dash.exceptions import PreventUpdate
@@ -105,12 +108,6 @@ layer_table = dash_table.DataTable(
 )
 
 
-@app.callback(
-    Output("accordion-item", "children"),
-    Output("input_contrast_range", "max"),
-    [Input("btn-add-contrast", "n_clicks")],
-    [State("accordion-item", "children")],
-)
 def add_contrast(n, div_children):
     acc_item = dbc.AccordionItem(
         [dbc.FormFloating(
@@ -158,23 +155,15 @@ def add_contrast(n, div_children):
         id={"type": "dynamic-acc-item", "index": n},
     )
     div_children.append(acc_item)
-    return div_children, n + 1
+    return div_children, n
 
 
-@app.callback(
-    Output("accordion-item", "children"),
-    Output("input_contrast_range", "max"),
-    Input("btn-delete-contrast", "n_clicks"),
-    State("accordion-item", "children"),
-    State("btn-add-contrast", "n_clicks"),
-    State("input_contrast_range", "value"),
-)
 def delete_contrast(n, div_children, ncontrast, which):
     if n > 0:
         div_children.pop(which + 1)
-        return div_children, ncontrast
+        return div_children, ncontrast - 1
     else:
-        return div_children, ncontrast + 1
+        return div_children, ncontrast
 
 
 @app.callback(
@@ -234,7 +223,7 @@ col1 = html.Div([
     dbc.Button("Add contrast", id="btn-add-contrast", n_clicks=0),
     dbc.Button("Delete contrast", id="btn-delete-contrast", n_clicks=0),
     dcc.Input(id="input_contrast_range", type="number", placeholder="input with range",
-              value=1, min=1, max=100, step=1, ),
+              value=1, min=1, max=1, step=1, ),
 
     dbc.Button("Save Model...", id="btn-download-model", style={"margin-left": "15px"}, n_clicks=0),
     dcc.Download(id="download-model")
@@ -282,7 +271,7 @@ def generate_code(par_data, selected_rows, layer_data, contrast_data):
     #
     for index, row in contrast_data.iterrows():
         outstring += '''    
-        s_contrast_{} ='''.format(index+1)
+        s_contrast_{} ='''.format(index + 1)
         for lay in row:
             if lay is not None:
                 outstring += ''' {} |'''.format(lay['Layer'].replace(' ', '_'))
@@ -297,14 +286,6 @@ def generate_code(par_data, selected_rows, layer_data, contrast_data):
     return code
 
 
-@app.callback(Output('parameter-table', 'data'),
-              Output('layer-table', 'data'),
-              Output('accordion-item', 'children'),
-              Input('upload-data', 'contents'),
-              State('upload-data', 'filename'),
-              State('upload-data', 'last_modified'),
-              State('accordion-item', 'children')
-              )
 def load_model(model_dict, filename, list_of_dates, acc_item):
     if model_dict is not None:
         content_type, content_string = model_dict.split(",")
@@ -314,11 +295,12 @@ def load_model(model_dict, filename, list_of_dates, acc_item):
         params = content_dict['Pars']
         layers = content_dict['Layers']
         contrasts = content_dict['Contrasts']
+        print(contrasts)
         # for i in range(2, len(acc_item)):
         #     print(i)
         # acc_item.pop(-1)
 
-        return params, layers, acc_item #, contrasts
+        return params, layers, acc_item  # , contrasts
     else:
         default_pars = [{"Parameter Name": "oxide SLD",
                          "Value": "3.47",
@@ -447,10 +429,54 @@ def save_model(par_data, layer_data, contrast_data, ncontrasts, n_clicks):
 
     contrast_list = []
     for i, contrast in enumerate(contrast_data):
-        contrast_list.append({'Contrast_'+str(i+1): contrast})
+        contrast_list.append({'Contrast_' + str(i + 1): contrast})
 
     model_dict['Contrasts'] = contrast_list
     return dict(content=json.dumps(model_dict, indent=4), filename="model.json")
+
+
+@app.callback(
+    output=dict(
+        par_table=Output('parameter-table', 'data'),
+        layer_table=Output('layer-table', 'data'),
+        acc_item_out=Output('accordion-item', 'children'),
+        add_contrast_out=Output("btn-add-contrast", "n_clicks"),
+        max_contrast_out=Output("input_contrast_range", "max"),
+    ),
+    inputs=dict(
+        data_in=Input('upload-data', 'contents'),
+        add_contrast=Input("btn-add-contrast", "n_clicks"),
+        del_contrast=Input("btn-delete-contrast", "n_clicks"),
+        fname=State('upload-data', 'filename'),
+        last_mod=State('upload-data', 'last_modified'),
+        acc_item_in=State('accordion-item', 'children'),
+        max_contrast_in=State("input_contrast_range", "value"),
+    ),
+)
+def contrast_handling(**kwargs):
+    @dataclass
+    class Update:
+        par_table: ... = no_update
+        layer_table: ... = no_update
+        acc_item_out: ... = no_update
+        add_contrast_out: ... = no_update
+        max_contrast_out: ... = no_update
+
+    if ctx.triggered_id == 'upload-data':
+        params, layers, acc_item = load_model(kwargs["data_in"], kwargs["fname"], kwargs["last_mod"],
+                                              kwargs["acc_item_in"])
+        return asdict(Update(par_table=params, layer_table=layers, acc_item_out=acc_item))
+
+    if ctx.triggered_id == 'btn-add-contrast':
+        div_children, max_con = add_contrast(kwargs["add_contrast"], kwargs["acc_item_in"])
+        return asdict(Update(acc_item_out=div_children, max_contrast_out=max_con, add_contrast_out=max_con))
+
+    if ctx.triggered_id == 'btn-delete-contrast':
+        div_children, max_con = delete_contrast(kwargs["del_contrast"], kwargs["acc_item_in"],
+                                                  kwargs["add_contrast"], kwargs["max_contrast_in"])
+        return asdict(Update(acc_item_out=div_children, max_contrast_out=max_con, add_contrast_out=max_con))
+
+    return asdict(Update())
 
 
 if __name__ == '__main__':
