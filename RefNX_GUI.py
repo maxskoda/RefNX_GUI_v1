@@ -108,7 +108,13 @@ layer_table = dash_table.DataTable(
 )
 
 
-def add_contrast(n, div_children):
+def add_contrast(n, div_children, contrast_tables=None):
+
+    if contrast_tables is None:
+        con_data = [{"Layer Name": "Layer", "Layer": ""}]
+    else:
+        con_data = contrast_tables
+
     acc_item = dbc.AccordionItem(
         [dbc.FormFloating(
             [
@@ -125,9 +131,9 @@ def add_contrast(n, div_children):
                 columns=[{"id": "Layer Name", "name": "Layer Name"},
                          {"id": "Layer", "name": "Layer", "presentation": "dropdown"}, ],
                 style_cell={'textAlign': 'left', 'font-size': 14, 'padding': '0px'},
-                data=[{"Layer Name": "Layer",
-                       "Layer": ""
-                       }],
+                data=con_data, #[{"Layer Name": "Layer",
+                       # "Layer": ""
+                       # }],
 
                 editable=True,
                 row_deletable=True,
@@ -159,7 +165,7 @@ def add_contrast(n, div_children):
 
 
 def delete_contrast(n, div_children, ncontrast, which):
-    if n > 0:
+    if n > 0 and ncontrast > 0:
         div_children.pop(which + 1)
         return div_children, ncontrast - 1
     else:
@@ -295,10 +301,14 @@ def load_model(model_dict, filename, list_of_dates, acc_item):
         params = content_dict['Pars']
         layers = content_dict['Layers']
         contrasts = content_dict['Contrasts']
-        print(contrasts)
-        # for i in range(2, len(acc_item)):
-        #     print(i)
-        # acc_item.pop(-1)
+    # delete contrasts present, before adding ones from file
+        del acc_item[2:]
+
+    # add contrasts from file
+        for n, con in enumerate(contrasts):
+            for key in con:
+                add_contrast(n, acc_item, con[key])
+
 
         return params, layers, acc_item  # , contrasts
     else:
@@ -465,7 +475,8 @@ def contrast_handling(**kwargs):
     if ctx.triggered_id == 'upload-data':
         params, layers, acc_item = load_model(kwargs["data_in"], kwargs["fname"], kwargs["last_mod"],
                                               kwargs["acc_item_in"])
-        return asdict(Update(par_table=params, layer_table=layers, acc_item_out=acc_item))
+        return asdict(Update(par_table=params, layer_table=layers, acc_item_out=acc_item,
+                             max_contrast_out=len(acc_item)-2, add_contrast_out=len(acc_item)-2))
 
     if ctx.triggered_id == 'btn-add-contrast':
         div_children, max_con = add_contrast(kwargs["add_contrast"], kwargs["acc_item_in"])
