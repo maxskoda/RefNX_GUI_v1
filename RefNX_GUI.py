@@ -9,6 +9,9 @@ from dash.dependencies import Input, Output, State
 from dash_extensions.enrich import Output, DashProxy, Input, MultiplexerTransform
 from dash.exceptions import PreventUpdate
 
+from dash.dash_table import DataTable
+from dash.dash_table.Format import Format, Padding, Scheme, Trim
+
 import dash_bootstrap_components as dbc
 import pandas as pd
 import json
@@ -108,8 +111,48 @@ layer_table = dash_table.DataTable(
 )
 
 
-def add_contrast(n, div_children, contrast_tables=None):
+def make_table(table_id, title, name="", value=0, minval=0, maxval=0):
+    table = dash_table.DataTable(
+        id=table_id,  # 'background-table',
+        columns=[{"id": title, "name": title},
+                 {"id": "Value", "name": "Value", "type": "numeric",
+                  "format": Format(precision=2, scheme=Scheme.exponent)},
+                 {"id": "Min", "name": "Min Value", "type": "numeric",
+                  "format": Format(precision=2, scheme=Scheme.exponent)},
+                 {"id": "Max", "name": "Max Value", "type": "numeric",
+                  "format": Format(precision=2, scheme=Scheme.exponent)}],
+        style_cell={'textAlign': 'left', 'font-size': 14, 'padding': '0px'},
+        data=[{title: name,
+               "Value": value,
+               "Min": minval,
+               "Max": maxval
+               }],
+        selected_rows=[],
+        editable=True,
+        row_deletable=True,
+        # row_selectable='multi',
+        page_size=10,
+        # style_as_list_view=True,
+        style_data={
+            # 'color': 'black',
+            # 'backgroundColor': 'white'
+        },
+        style_data_conditional=[
+            {
+                'if': {'row_index': 'odd'},
+                'backgroundColor': 'rgb(20, 20, 20)',
+            }
+        ],
+        style_header={
+            'backgroundColor': 'rgb(210, 210, 210)',
+            'color': 'black',
+            'fontWeight': 'bold'
+        }
+    )
+    return table
 
+
+def add_contrast(n, div_children, contrast_tables=None):
     if contrast_tables is None:
         con_data = [{"Layer Name": "Layer", "Layer": ""}]
     else:
@@ -131,9 +174,9 @@ def add_contrast(n, div_children, contrast_tables=None):
                 columns=[{"id": "Layer Name", "name": "Layer Name"},
                          {"id": "Layer", "name": "Layer", "presentation": "dropdown"}, ],
                 style_cell={'textAlign': 'left', 'font-size': 14, 'padding': '0px'},
-                data=con_data, #[{"Layer Name": "Layer",
-                       # "Layer": ""
-                       # }],
+                data=con_data,  # [{"Layer Name": "Layer",
+                # "Layer": ""
+                # }],
 
                 editable=True,
                 row_deletable=True,
@@ -220,6 +263,21 @@ col1 = html.Div([
                  layer_table],
                 title="Layers",
             ),
+            dbc.AccordionItem(
+                [dbc.Button('Add Background', id='add-background-button', n_clicks=0, style={"padding": '5px'},),
+                 make_table("background_table", "Background Name", "Background 1", 1e-6, 1e-7, 1e-5),
+
+                 dbc.Button('Add Scale', id='add-scale-button', n_clicks=0, style={"padding": '5px'},),
+                 make_table("scale_table", "Scale Name", "Scale 1", 1, 0.9, 1.1),
+
+                 dbc.Button('Add SLD in', id='add-SLD-in-button', n_clicks=0, style={"padding": '5px'},),
+                 make_table("SLD_in_table", "SLD beam in", "Si", 2.07e-6, 2e-6, 2.1e-6),
+
+                 dbc.Button('Add SLD out', id='add-SLD-out-button', n_clicks=0, style={"padding": '5px'},),
+                 make_table("SLD_out_table", "SLD beam out", "D2O", 6.31e-6, 6e-6, 6.35e-6),
+                 ],
+                title="Experimental Parameters",
+            ),
         ],
         always_open=True,
     ),
@@ -301,14 +359,13 @@ def load_model(model_dict, filename, list_of_dates, acc_item):
         params = content_dict['Pars']
         layers = content_dict['Layers']
         contrasts = content_dict['Contrasts']
-    # delete contrasts present, before adding ones from file
-        del acc_item[2:]
+        # delete contrasts present, before adding ones from file
+        del acc_item[3:]
 
-    # add contrasts from file
+        # add contrasts from file
         for n, con in enumerate(contrasts):
             for key in con:
                 add_contrast(n, acc_item, con[key])
-
 
         return params, layers, acc_item  # , contrasts
     else:
@@ -364,7 +421,8 @@ def on_table_change(selected_rows, par_data, layer_data, contrast_data):
     Output({"type": "contrast-table", "index": MATCH}, 'data'),
     Input({"type": "dynamic-button", "index": MATCH}, 'n_clicks'),
     State({"type": "contrast-table", "index": MATCH}, 'data'),
-    State({"type": "contrast-table", "index": MATCH}, 'columns')
+    State({"type": "contrast-table", "index": MATCH}, 'columns'),
+    prevent_initial_call=True
 )
 def add_contrast_table_row(n_clicks, rows, columns):
     if n_clicks > 0:
@@ -476,7 +534,7 @@ def contrast_handling(**kwargs):
         params, layers, acc_item = load_model(kwargs["data_in"], kwargs["fname"], kwargs["last_mod"],
                                               kwargs["acc_item_in"])
         return asdict(Update(par_table=params, layer_table=layers, acc_item_out=acc_item,
-                             max_contrast_out=len(acc_item)-2, add_contrast_out=len(acc_item)-2))
+                             max_contrast_out=len(acc_item) - 3, add_contrast_out=len(acc_item) - 3))
 
     if ctx.triggered_id == 'btn-add-contrast':
         div_children, max_con = add_contrast(kwargs["add_contrast"], kwargs["acc_item_in"])
@@ -484,7 +542,7 @@ def contrast_handling(**kwargs):
 
     if ctx.triggered_id == 'btn-delete-contrast':
         div_children, max_con = delete_contrast(kwargs["del_contrast"], kwargs["acc_item_in"],
-                                                  kwargs["add_contrast"], kwargs["max_contrast_in"])
+                                                kwargs["add_contrast"], kwargs["max_contrast_in"])
         return asdict(Update(acc_item_out=div_children, max_contrast_out=max_con, add_contrast_out=max_con))
 
     return asdict(Update())
