@@ -1,0 +1,149 @@
+{
+    "Pars": [
+        {
+            "Parameter Name": "oxide SLD",
+            "Value": "3.47",
+            "Min": "3.45",
+            "Max": "3.5"
+        },
+        {
+            "Parameter Name": "oxide thick",
+            "Value": "15",
+            "Min": "12",
+            "Max": "25"
+        },
+        {
+            "Parameter Name": "oxide rough",
+            "Value": "6",
+            "Min": "3",
+            "Max": "12"
+        },
+        {
+            "Parameter Name": "lay1 thick",
+            "Value": "45",
+            "Min": "20",
+            "Max": "60"
+        },
+        {
+            "Parameter Name": "lay1 SLD",
+            "Value": "2.8",
+            "Min": "2",
+            "Max": "3"
+        }
+    ],
+    "Layers": [
+        {
+            "Layer Name": "oxide",
+            "Thickness": "oxide thick",
+            "SLD": "oxide SLD",
+            "Roughness": "oxide rough"
+        },
+        {
+            "Layer Name": "layer1",
+            "Thickness": "lay1 thick",
+            "SLD": "lay1 SLD",
+            "Roughness": "oxide rough"
+        },
+        {
+            "Layer Name": "layer2",
+            "Thickness": "oxide SLD",
+            "SLD": "oxide thick",
+            "Roughness": "oxide rough",
+            "Hydration": ""
+        }
+    ],
+    "Backgrounds": [
+        {
+            "Background Name": "Background 1",
+            "Value": 1e-06,
+            "Min": 1e-07,
+            "Max": 1e-05
+        }
+    ],
+    "SLD_in": [
+        {
+            "SLD beam in": "Si",
+            "Value": 2.07e-06,
+            "Min": 2e-06,
+            "Max": 2.1e-06
+        }
+    ],
+    "SLD_out": [
+        {
+            "SLD beam out": "D2O",
+            "Value": 6.31e-06,
+            "Min": 6e-06,
+            "Max": 6.35e-06
+        }
+    ],
+    "Contrasts": [
+        {
+            "Contrast_1": [
+                {
+                    "Layer Name": "Layer",
+                    "Layer": "oxide"
+                },
+                {
+                    "Layer Name": "",
+                    "Layer": "oxide"
+                },
+                {
+                    "Layer Name": "",
+                    "Layer": "oxide"
+                },
+                {
+                    "Layer Name": "",
+                    "Layer": ""
+                },
+                {
+                    "Layer Name": "",
+                    "Layer": ""
+                }
+            ]
+        },
+        {
+            "Contrast_2": [
+                {
+                    "Layer Name": "Layer",
+                    "Layer": "layer1"
+                },
+                {
+                    "Layer Name": "",
+                    "Layer": "layer1"
+                },
+                {
+                    "Layer Name": "",
+                    "Layer": ""
+                },
+                {
+                    "Layer Name": "",
+                    "Layer": ""
+                }
+            ]
+        },
+        {
+            "Contrast_3": [
+                {
+                    "Layer Name": "Layer",
+                    "Layer": "layer2"
+                },
+                {
+                    "Layer Name": "",
+                    "Layer": "layer2"
+                },
+                {
+                    "Layer Name": "",
+                    "Layer": "layer2"
+                },
+                {
+                    "Layer Name": "",
+                    "Layer": ""
+                },
+                {
+                    "Layer Name": "",
+                    "Layer": ""
+                }
+            ]
+        }
+    ]
+}
