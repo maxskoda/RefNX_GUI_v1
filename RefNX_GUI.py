@@ -1,6 +1,8 @@
 import base64
 import pprint
 
+import refnx
+
 from dataclasses import dataclass, asdict
 from enum import Enum, auto
 
@@ -8,6 +10,7 @@ from dash import Dash, dash_table, dcc, html, ctx, no_update, ALL, MATCH, ALLSMA
 from dash.dependencies import Input, Output, State
 from dash_extensions.enrich import Output, DashProxy, Input, MultiplexerTransform
 from dash.exceptions import PreventUpdate
+import dash_editor_components
 
 from dash.dash_table import DataTable
 from dash.dash_table.Format import Format, Padding, Scheme, Trim
@@ -154,7 +157,7 @@ def make_table(table_id, title, name="", value=0, minval=0, maxval=0):
 
 def add_contrast(n, div_children, contrast_tables=None):
     if contrast_tables is None:
-        con_data = [{"Layer Name": "Layer", "Layer": ""}]
+        con_data = [{"Layer Name": "Beam in", "Layer": ""}]
     else:
         con_data = contrast_tables
 
@@ -264,17 +267,17 @@ col1 = html.Div([
                 title="Layers",
             ),
             dbc.AccordionItem(
-                [dbc.Button('Add Background', id='add-background-button', n_clicks=0, style={"padding": '5px'},),
-                 make_table("background_table", "Background Name", "Background 1", 1e-6, 1e-7, 1e-5),
+                [dbc.Button('Add Background', id='add-background-button', n_clicks=0, style={"padding": '5px'}, ),
+                 make_table("background-table", "Background Name", "Background 1", 1e-6, 1e-7, 1e-5),
 
-                 dbc.Button('Add Scale', id='add-scale-button', n_clicks=0, style={"padding": '5px'},),
-                 make_table("scale_table", "Scale Name", "Scale 1", 1, 0.9, 1.1),
+                 dbc.Button('Add Scale', id='add-scale-button', n_clicks=0, style={"padding": '5px'}, ),
+                 make_table("scale-table", "Scale Name", "Scale 1", 1, 0.9, 1.1),
 
-                 dbc.Button('Add SLD in', id='add-SLD-in-button', n_clicks=0, style={"padding": '5px'},),
-                 make_table("SLD_in_table", "SLD beam in", "Si", 2.07e-6, 2e-6, 2.1e-6),
+                 dbc.Button('Add SLD in', id='add-SLD-in-button', n_clicks=0, style={"padding": '5px'}, ),
+                 make_table("SLD-in-table", "SLD beam in", "Si", 2.07e-6, 2e-6, 2.1e-6),
 
-                 dbc.Button('Add SLD out', id='add-SLD-out-button', n_clicks=0, style={"padding": '5px'},),
-                 make_table("SLD_out_table", "SLD beam out", "D2O", 6.31e-6, 6e-6, 6.35e-6),
+                 dbc.Button('Add SLD out', id='add-SLD-out-button', n_clicks=0, style={"padding": '5px'}, ),
+                 make_table("SLD-out-table", "SLD beam out", "D2O", 6.31e-6, 6e-6, 6.35e-6),
                  ],
                 title="Experimental Parameters",
             ),
@@ -299,53 +302,93 @@ col1 = html.Div([
 app.layout = html.Div(
     [
         dbc.Row([dbc.Col(col1),
-                 dbc.Col(html.Div(html.Div(id='some-output'),
-                                  style={'width': '95%', 'display': 'inline-block', 'vertical-align': 'middle'},
-                                  className="dbc"), )]),
+                 # dbc.Col(html.Div(html.Div(id='some-output'),
+                 #                  style={'width': '95%', 'display': 'inline-block', 'vertical-align': 'middle'},
+                 #                  className="dbc"), )]),
+                 dbc.Col(html.Div(html.Div([
+                     dash_editor_components.PythonEditor(
+                         id='some-output'
+                     )]
+                 ),
+
+                     style={'width': '95%', 'display': 'inline-block', 'vertical-align': 'middle'},
+                     className="dbc"), )]),
+
     ]
 )
 
 
-def generate_code(par_data, selected_rows, layer_data, contrast_data):
+class GenerateCode:
+    def __init__(self, par_data, selected_rows, layer_data, experiment_data, contrast_data):
+        self.pars = par_data
+        self.rows = selected_rows
+        self.layers = layer_data
+        self.experiment_data = experiment_data
+        self.contrasts = contrast_data
+
+    def write_slds(self, experiment_data):
+        outstring = '# Material definition'
+        print(experiment_data['sld-in']['Value'])
+        # d2o = SLD(6.36 + 0j)
+        # for index, row in experiment_data.iterrows():
+        #     outstring += '''{}_l = Slab({}, {}, {}, name='{}', vfsolv=0, interface=None))
+        #     '''.format(row['Layer Name'].replace(' ', '_'),
+        #                row['Thickness'].replace(' ', '_'), row['SLD'].replace(' ', '_'),
+        #                row['Roughness'].replace(' ', '_'),
+        #                row['Layer Name'].replace(' ', '_'))
+        # return outstring
+
+    def write_pars(self, par_data):
+        outstring = '# Parameter definition\n'
+        selected_rows = self.rows
+        for index, row in par_data.iterrows():
+            outstring += '{} = Parameter({}, "{}", bounds=({}, {}), vary={})\n'.format(row['Parameter Name'].replace(' ', '_'),
+                       row['Value'], row['Parameter Name'].replace(' ', '_'),
+                       row['Min'], row['Max'],
+                       index in selected_rows)
+        return outstring+'\n'
+
+    def write_layers(self, layer_data):
+        outstring = '# Layer definition\n'
+        for index, row in layer_data.iterrows():
+            outstring += '{}_l = Slab({}, {}, {}, name={}, vfsolv=0, interface=None)\n'.format(row['Layer Name'].replace(' ', '_'),
+                       row['Thickness'].replace(' ', '_'), row['SLD'].replace(' ', '_'),
+                       row['Roughness'].replace(' ', '_'),
+                       row['Layer Name'].replace(' ', '_'))
+        return outstring+'\n'
+
+    def write_contrasts(self, contrast_data):
+        outstring = '# Contrast definition'
+        for index, row in contrast_data.iterrows():
+            outstring += '\ns_contrast_{} ='.format(index + 1)
+            for lay in row:
+                if lay is not None:
+                    outstring += ' {} |'.format(lay['Layer'].replace(' ', '_'))
+        return outstring+'\n'
+
+
+def generate_code(par_data, selected_rows, layer_data, experiment_data, contrast_data):
     par_data = par_data.reset_index()  # make sure indexes pair with number of rows
     layer_data = layer_data.reset_index()  # make sure indexes pair with number of rows
+    # experiment_data = None
 
-    outstring = '''    '''
+    outstring = ''
 
-    for index, row in par_data.iterrows():
-        outstring += '''{} = Parameter({}, "{}", bounds=({}, {}), vary={})
-        '''.format(row['Parameter Name'].replace(' ', '_'),
-                   row['Value'], row['Parameter Name'].replace(' ', '_'),
-                   row['Min'], row['Max'],
-                   index in selected_rows)
+    cd = GenerateCode(par_data, selected_rows, layer_data, experiment_data, contrast_data)
 
-    outstring += '''
-        '''
-
-    for index, row in layer_data.iterrows():
-        outstring += '''{}_l = Slab({}, {}, {}, name='{}', vfsolv=0, interface=None))
-        '''.format(row['Layer Name'].replace(' ', '_'),
-                   row['Thickness'].replace(' ', '_'), row['SLD'].replace(' ', '_'), row['Roughness'].replace(' ', '_'),
-                   row['Layer Name'].replace(' ', '_'))
-
-    outstring += '''
-    '''
+    cd.write_slds(experiment_data)
+    outstring += cd.write_pars(par_data)
+    outstring += '\n'
+    outstring += cd.write_layers(layer_data)
+    outstring += '\n'
+    outstring += cd.write_contrasts(contrast_data)
 
     # outstring += '''    s_contrast = '''
     #
-    for index, row in contrast_data.iterrows():
-        outstring += '''    
-        s_contrast_{} ='''.format(index + 1)
-        for lay in row:
-            if lay is not None:
-                outstring += ''' {} |'''.format(lay['Layer'].replace(' ', '_'))
 
     # # s_d2o_sub = si_sld | oxide_l | d2o(0, solv_roughness)
 
-    code = dcc.Markdown('''
-    ```python
-    {}
-    ```'''.format(outstring))
+    code = outstring
 
     return code
 
@@ -394,27 +437,41 @@ def on_contrast_table_change(data, contrast_data):
     return opts
 
 
-@app.callback(Output('some-output', 'children'),
+@app.callback(Output('some-output', 'value'),
               Output('layer-table', 'dropdown'),
               Input('parameter-table', 'selected_rows'),
               Input('parameter-table', 'data'),
               State('layer-table', 'data'),
+              State('background-table', 'data'),
+              State('scale-table', 'data'),
+              State('SLD-in-table', 'data'),
+              State('SLD-out-table', 'data'),
               # State({"type": "dynamic-acc-item", "index": ALL}, )
               State({"type": "contrast-table", "index": ALL}, 'data')
               )
-def on_table_change(selected_rows, par_data, layer_data, contrast_data):
+def on_table_change(selected_rows, par_data, layer_data,
+                    background_data, scale_data, sld_in, sld_out,
+                    contrast_data):
     p_data = pd.DataFrame(par_data)
     l_data = pd.DataFrame(layer_data)
     c_data = pd.DataFrame(contrast_data)
+    bkg_data = pd.DataFrame(background_data)
+    scale_data = pd.DataFrame(scale_data)
+    sld_in = pd.DataFrame(sld_in)
+    sld_out = pd.DataFrame(sld_out)
 
-    code = generate_code(p_data, selected_rows, l_data, c_data)
+    code = generate_code(p_data, selected_rows, l_data,
+                         {'bkg-data': bkg_data, 'scale-data': scale_data,
+                          'sld-in': sld_in, 'sld-out': sld_out},
+                         c_data)
 
     opts = {'Thickness': {'options': [{'label': v, 'value': v} for v in p_data.loc[:, 'Parameter Name']]},
             'SLD': {'options': [{'label': v, 'value': v} for v in p_data.loc[:, 'Parameter Name']]},
             'Roughness': {'options': [{'label': v, 'value': v} for v in p_data.loc[:, 'Parameter Name']]},
             'Hydration': {'options': [{'label': v, 'value': v} for v in p_data.loc[:, 'Parameter Name']]}
             }
-    return code, opts
+    # print(exec(str(code)))
+    return str(code), opts
 
 
 @app.callback(
@@ -438,7 +495,7 @@ def upon_click(n_clicks):
     if n_clicks == 1:
         raise PreventUpdate
 
-    return 1
+    return 0
 
 
 @app.callback(
@@ -488,12 +545,21 @@ def upon_click(n_clicks):
 @app.callback(Output("download-model", "data"),
               State("parameter-table", "data"),
               State("layer-table", "data"),
+              State("background-table", "data"),
+              State("SLD-in-table", "data"),
+              State("SLD-out-table", "data"),
               State({"type": "contrast-table", "index": ALL}, "data"),
               State("btn-add-contrast", "n_clicks"),
               Input("btn-download-model", "n_clicks"),
-              prevent_initial_call=True, )
-def save_model(par_data, layer_data, contrast_data, ncontrasts, n_clicks):
-    model_dict = {'Pars': par_data, 'Layers': layer_data}
+              prevent_initial_call=True,
+              )
+def save_model(par_data, layer_data, background_data, sld_in, sld_out,
+               contrast_data, ncontrasts, n_clicks):
+    model_dict = {'Pars': par_data, 'Layers': layer_data,
+                  'Backgrounds': background_data,
+                  'SLD_in': sld_in,
+                  'SLD_out': sld_out,
+                  }
 
     contrast_list = []
     for i, contrast in enumerate(contrast_data):
